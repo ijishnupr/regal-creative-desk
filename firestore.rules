@@ -1,0 +1,98 @@
+rules_version = '2';
+
+// Regal Creative Desk — Firestore security rules
+// Roles live in users/{uid}.role and can only be created by the backend
+// (ensureProfile Cloud Function) or changed by an Admin.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function me() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    function hasProfile() { return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)); }
+    function isAdmin() { return hasProfile() && me().role == 'Admin'; }
+    function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
+
+    // ---------- Employees ----------
+    match /users/{uid} {
+      allow read: if hasProfile() || (signedIn() && request.auth.uid == uid);
+      // Profiles are created server-side. Admins may change name/role/active.
+      allow update: if isAdmin()
+        && changed().hasOnly(['name', 'role', 'active', 'updatedAt'])
+        && request.resource.data.role in ['Admin', 'Designer'];
+      // A user may update their own display name / photo.
+      allow update: if signedIn() && request.auth.uid == uid
+        && changed().hasOnly(['name', 'photoURL', 'updatedAt']);
+      allow create, delete: if false;
+    }
+
+    // Pending invitations keyed by lower-case email
+    match /invites/{email} {
+      allow read, delete: if isAdmin();
+      allow create, update: if isAdmin()
+        && request.resource.data.role in ['Admin', 'Designer']
+        && email == email.lower();
+    }
+
+    // ---------- Campaigns ----------
+    match /campaigns/{id} {
+      allow read: if hasProfile();
+      // coverFileId is written only by the backend upload endpoint
+      allow create: if isAdmin() && !('coverFileId' in request.resource.data);
+      allow update: if isAdmin() && !changed().hasAny(['coverFileId']);
+      allow delete: if isAdmin();
+    }
+
+    // ---------- Tasks ----------
+    match /tasks/{id} {
+      function isAssignee() { return signedIn() && resource.data.assigneeId == request.auth.uid; }
+
+      allow read: if isAdmin() || (hasProfile() && isAssignee());
+      allow create: if isAdmin()
+        && !request.resource.data.keys().hasAny(['fileId', 'fileName', 'fileMime']);
+      allow update: if isAdmin()
+        && !changed().hasAny(['fileId', 'fileName', 'fileMime']);
+      // Designers update their own progress but can never approve their own work.
+      allow update: if hasProfile() && isAssignee()
+        && changed().hasOnly(['status', 'hours', 'submission', 'updatedAt'])
+        && request.resource.data.status in ['To Do', 'In Progress', 'In Review', resource.data.status]
+        && request.resource.data.hours is number && request.resource.data.hours >= 0;
+      allow delete: if isAdmin();
+
+      // Pinned artwork corrections
+      match /annotations/{annId} {
+        function task() { return get(/databases/$(database)/documents/tasks/$(id)).data; }
+        allow read: if isAdmin() || (hasProfile() && task().assigneeId == request.auth.uid);
+        allow create, delete: if isAdmin();
+        allow update: if isAdmin()
+          || (hasProfile() && task().assigneeId == request.auth.uid
+              && changed().hasOnly(['resolved', 'resolvedAt', 'resolvedBy']));
+      }
+    }
+
+    // ---------- Activity log (append-only) ----------
+    match /activity/{id} {
+      allow read: if hasProfile();
+      allow create: if hasProfile()
+        && request.resource.data.actorUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // ---------- Notifications ----------
+    match /notifications/{id} {
+      allow read, delete: if signedIn() && resource.data.toUid == request.auth.uid;
+      allow create: if hasProfile()
+        && request.resource.data.fromUid == request.auth.uid
+        && request.resource.data.read == false;
+      allow update: if signedIn() && resource.data.toUid == request.auth.uid
+        && changed().hasOnly(['read']);
+    }
+
+    // Upload index — managed by the backend only
+    match /files/{id} {
+      allow read, write: if false;
+    }
+    match /meta/{id} {
+      allow read, write: if false;
+    }
+  }
+}
