@@ -1,13 +1,10 @@
 node_modules/
 web/dist/
-functions/lib/
 .env
 .env.local
-functions/.env
-functions/.env.*
 !functions/.env.example
 *.log
 .firebase/
 service-account*.json
-functions/.local-drive/
 *.tsbuildinfo
+scripts/.local-drive/

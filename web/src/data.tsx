@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   collection, doc, onSnapshot, query, where, orderBy, limit, writeBatch, serverTimestamp,
-  updateDoc, setDoc, deleteDoc, type QueryConstraint, type WriteBatch,
+  updateDoc, setDoc, deleteDoc, arrayUnion, type QueryConstraint, type WriteBatch,
 } from "firebase/firestore";
 import { db } from "./firebase";
 import { useMe } from "./auth";
@@ -23,10 +23,21 @@ function useLive<T>(path: string, constraints: QueryConstraint[], enabled: boole
   const [ready, setReady] = useState(false);
   useEffect(() => {
     if (!enabled) { setRows([]); setReady(true); return; }
-    return onSnapshot(query(collection(db, path), ...constraints), (snap) => {
-      setRows(snap.docs.map((d) => ({ id: d.id, ...d.data({ serverTimestamps: "estimate" }) }) as T));
-      setReady(true);
-    }, (err) => { console.error(path, err); setReady(true); });
+    let unsub: (() => void) | undefined, timer: ReturnType<typeof setTimeout> | undefined, tries = 0;
+    const listen = () => {
+      unsub = onSnapshot(query(collection(db, path), ...constraints), (snap) => {
+        tries = 0;
+        setRows(snap.docs.map((d) => ({ id: d.id, ...d.data({ serverTimestamps: "estimate" }) }) as T));
+        setReady(true);
+      }, (err) => {
+        // A listener stops on error (e.g. a role change in flight): retry with backoff.
+        console.warn(path, err.code);
+        setReady(true);
+        if (tries < 6) timer = setTimeout(listen, 500 * 2 ** tries++);
+      });
+    };
+    listen();
+    return () => { unsub?.(); clearTimeout(timer); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
   return [rows, ready] as const;
@@ -141,6 +152,15 @@ export const actions = {
     notify(b, me, [t.assigneeId], t.id, status === "Revisions" ? `Admin requested corrections: ${t.title}${t.feedback ? " · " + t.feedback : ""}` : `Admin approved: ${t.title}`);
     log(b, me, `${t.title} marked ${status}`, t.campaignId);
     fire(b, onError);
+  },
+  attachTaskFile(me: Me, taskId: string, fileId: string, fileName: string, fileMime: string, onError?: (e: Error) => void) {
+    updateDoc(doc(db, "tasks", taskId), {
+      fileId, fileName, fileMime, updatedAt: serverTimestamp(),
+      fileVersions: arrayUnion({ fileId, fileName, at: Date.now(), by: me.id }),
+    }).catch((e) => onError?.(e));
+  },
+  setCover(campaignId: string, fileId: string, onError?: (e: Error) => void) {
+    updateDoc(doc(db, "campaigns", campaignId), { coverFileId: fileId, updatedAt: serverTimestamp() }).catch((e) => onError?.(e));
   },
   deleteTask(id: string) { return deleteDoc(doc(db, "tasks", id)); },
   addAnnotation(me: Me, t: Task, x: number, y: number, text: string, onError?: (e: Error) => void) {

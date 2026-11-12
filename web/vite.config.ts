@@ -4,8 +4,6 @@ import { VitePWA } from "vite-plugin-pwa";
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
-  // In dev, /api is proxied to your deployed site (or the hosting emulator).
-  const apiTarget = env.VITE_DEV_API_TARGET || "http://127.0.0.1:5000";
   // GitHub Pages project sites live under /<repo>/ — set VITE_BASE_PATH (the workflow does this).
   const base = env.VITE_BASE_PATH || "/";
   return {
@@ -34,14 +32,13 @@ export default defineConfig(({ mode }) => {
         workbox: {
           globPatterns: ["**/*.{js,css,html,png,svg,webmanifest}"],
           navigateFallback: "index.html",
-          navigateFallbackDenylist: [/^\/api\//, /^\/__\//],
+          navigateFallbackDenylist: [/^\/__\//],
           cleanupOutdatedCaches: true,
           clientsClaim: true,
           skipWaiting: true,
         },
       }),
     ],
-    server: { proxy: { "/api": { target: apiTarget, changeOrigin: true } } },
     build: {
       target: "es2022",
       cssCodeSplit: true,
@@ -49,7 +46,6 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         output: {
           manualChunks(id: string) {
-            if (id.includes("functions")) return; // loaded lazily at first sign-in
             if (id.includes("node_modules/@firebase/firestore")) return "firestore";
             if (id.includes("node_modules/firebase") || id.includes("node_modules/@firebase")) return "firebase";
             if (id.includes("node_modules/react")) return "react";

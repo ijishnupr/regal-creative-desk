@@ -1,13 +1,15 @@
 import { auth } from "./firebase";
 
 /**
- * File layer backed by Google Drive (via the /api Cloud Function).
- * Drive file IDs are immutable, so we cache blobs aggressively:
- *   memory (object URL)  ->  Cache Storage (survives reloads/offline)  ->  network
+ * File layer backed by Google Drive through a free Google Apps Script web app
+ * (see apps-script/Code.gs). Drive file IDs are immutable, so blobs are cached
+ * aggressively: memory (object URL) -> Cache Storage (survives reloads/offline) -> network.
+ *
+ * Local testing: scripts/mock-storage.mjs implements the same protocol against the emulators.
  */
-/** Backend base URL: full Cloud Function URL in production (GitHub Pages), "/api" via proxy in dev/emulator. */
-export const API = (import.meta.env.VITE_API_BASE || "/api").replace(/\/$/, "");
+const STORAGE_URL = (import.meta.env.VITE_STORAGE_URL || "").trim();
 const CACHE = "regal-drive-files-v1";
+const cacheKey = (id: string) => `${location.origin}/__drive-cache/${id}`;
 const memory = new Map<string, Promise<string>>();
 
 async function token() {
@@ -16,19 +18,48 @@ async function token() {
   return u.getIdToken();
 }
 
+/** POST as text/plain: a "simple" CORS request, which Apps Script supports (no preflight). */
+async function call<T>(action: string, body: Record<string, unknown>): Promise<T> {
+  if (!STORAGE_URL) throw new Error("File storage is not configured (VITE_STORAGE_URL).");
+  const res = await fetch(STORAGE_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify({ action, token: await token(), ...body }),
+    redirect: "follow",
+  });
+  if (!res.ok) throw new Error(`Storage error (HTTP ${res.status})`);
+  const out = await res.json();
+  if (out.error) throw new Error(out.error);
+  return out as T;
+}
+
+const openCache = () => ("caches" in window ? caches.open(CACHE).catch(() => null) : Promise.resolve(null));
+
+function b64ToBlob(b64: string, mime: string) {
+  const bin = atob(b64), bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new Blob([bytes], { type: mime });
+}
+function blobToB64(blob: Blob) {
+  return new Promise<string>((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result).split(",")[1] ?? "");
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(blob);
+  });
+}
+
 export function fileUrl(fileId: string): Promise<string> {
   let p = memory.get(fileId);
   if (p) return p;
   p = (async () => {
-    const key = `${API}/file/${fileId}`;
-    const cache = "caches" in window ? await caches.open(CACHE).catch(() => null) : null;
-    let res = cache ? await cache.match(key) : undefined;
-    if (!res) {
-      res = await fetch(key, { headers: { Authorization: `Bearer ${await token()}` } });
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
-      if (cache) await cache.put(key, res.clone()).catch(() => undefined);
-    }
-    return URL.createObjectURL(await res.blob());
+    const cache = await openCache();
+    const hit = cache ? await cache.match(cacheKey(fileId)) : undefined;
+    if (hit) return URL.createObjectURL(await hit.blob());
+    const { mime, data } = await call<{ mime: string; data: string }>("file", { id: fileId });
+    const blob = b64ToBlob(data, mime);
+    if (cache) await cache.put(cacheKey(fileId), new Response(blob, { headers: { "Content-Type": mime } })).catch(() => undefined);
+    return URL.createObjectURL(blob);
   })();
   p.catch(() => memory.delete(fileId));
   memory.set(fileId, p);
@@ -43,24 +74,18 @@ export async function clearFileCache() {
   if ("caches" in window) await caches.delete(CACHE).catch(() => undefined);
 }
 
-/** Upload with real progress events (XHR) straight into Drive via the backend. */
-export function uploadFile(kind: "task" | "cover", id: string, file: File, onProgress?: (pct: number) => void) {
-  return new Promise<{ fileId: string }>(async (resolve, reject) => {
-    try {
-      const xhr = new XMLHttpRequest();
-      xhr.open("POST", `${API}/upload?kind=${kind}&id=${encodeURIComponent(id)}`);
-      xhr.setRequestHeader("Authorization", `Bearer ${await token()}`);
-      xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
-      xhr.setRequestHeader("X-File-Name", encodeURIComponent(file.name));
-      xhr.upload.onprogress = (e) => e.lengthComputable && onProgress?.(Math.round((e.loaded / e.total) * 100));
-      xhr.onload = () => {
-        let body: { fileId?: string; error?: string } = {};
-        try { body = JSON.parse(xhr.responseText); } catch { /* ignore */ }
-        if (xhr.status >= 200 && xhr.status < 300 && body.fileId) resolve({ fileId: body.fileId });
-        else reject(new Error(body.error || `Upload failed (${xhr.status})`));
-      };
-      xhr.onerror = () => reject(new Error("Network error during upload"));
-      xhr.send(file);
-    } catch (e) { reject(e); }
-  });
+export type UploadStage = "reading" | "uploading" | "saving";
+
+/** Upload a file to Google Drive. Returns the new Drive file ID. */
+export async function uploadFile(kind: "task" | "cover", id: string, file: File, onStage?: (s: UploadStage) => void) {
+  const mime = file.type || "application/octet-stream";
+  onStage?.("reading");
+  const data = await blobToB64(file);
+  onStage?.("uploading");
+  const { fileId } = await call<{ fileId: string }>("upload", { kind, id, name: file.name, mime, data });
+  // Seed the local cache with what we already have => instant preview, no download.
+  const cache = await openCache();
+  if (cache) await cache.put(cacheKey(fileId), new Response(file, { headers: { "Content-Type": mime } })).catch(() => undefined);
+  onStage?.("saving");
+  return { fileId, fileName: file.name, mime };
 }

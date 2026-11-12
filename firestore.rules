@@ -1,45 +1,70 @@
 rules_version = '2';
 
-// Regal Creative Desk — Firestore security rules
-// Roles live in users/{uid}.role and can only be created by the backend
-// (ensureProfile Cloud Function) or changed by an Admin.
+// Regal Creative Desk — Firestore security rules (Spark / free plan, no backend).
+// Roles live in users/{uid}.role. A profile can only be created by its owner
+// when (a) an Admin invited that email with that role, or (b) nobody has
+// bootstrapped the system yet (first user becomes Admin).
 service cloud.firestore {
   match /databases/{database}/documents {
 
     function signedIn() { return request.auth != null; }
-    function me() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
-    function hasProfile() { return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)); }
+    function myEmail() { return request.auth.token.email.lower(); }
+    function verified() { return signedIn() && request.auth.token.email_verified == true; }
+    function userPath(uid) { return /databases/$(database)/documents/users/$(uid); }
+    function me() { return get(userPath(request.auth.uid)).data; }
+    function hasProfile() { return signedIn() && exists(userPath(request.auth.uid)) && me().active != false; }
     function isAdmin() { return hasProfile() && me().role == 'Admin'; }
     function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
+    function bootstrapPath() { return /databases/$(database)/documents/meta/bootstrap; }
+    function invitePath(email) { return /databases/$(database)/documents/invites/$(email); }
 
     // ---------- Employees ----------
     match /users/{uid} {
       allow read: if hasProfile() || (signedIn() && request.auth.uid == uid);
-      // Profiles are created server-side. Admins may change name/role/active.
+
+      // Self-registration: only via invite (matching role) or as the very first Admin.
+      allow create: if verified() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['name', 'email', 'role', 'photoURL', 'active', 'createdAt', 'updatedAt'])
+        && request.resource.data.email == myEmail()
+        && request.resource.data.active == true
+        && request.resource.data.name is string && request.resource.data.name.size() > 0
+        && (
+          (request.resource.data.role == 'Admin' && !exists(bootstrapPath()) && existsAfter(bootstrapPath()))
+          || (exists(invitePath(myEmail())) && get(invitePath(myEmail())).data.role == request.resource.data.role)
+        );
+
+      // Admins change name/role/active; users may edit their own name/photo.
       allow update: if isAdmin()
         && changed().hasOnly(['name', 'role', 'active', 'updatedAt'])
         && request.resource.data.role in ['Admin', 'Designer'];
-      // A user may update their own display name / photo.
-      allow update: if signedIn() && request.auth.uid == uid
+      allow update: if hasProfile() && request.auth.uid == uid
         && changed().hasOnly(['name', 'photoURL', 'updatedAt']);
-      allow create, delete: if false;
+      allow delete: if false;
+    }
+
+    // First-admin marker, written in the same batch as the first profile.
+    match /meta/bootstrap {
+      allow get: if signedIn();
+      allow create: if verified()
+        && request.resource.data.firstAdmin == request.auth.uid
+        && getAfter(userPath(request.auth.uid)).data.role == 'Admin';
+      allow update, delete: if false;
     }
 
     // Pending invitations keyed by lower-case email
     match /invites/{email} {
-      allow read, delete: if isAdmin();
+      allow read: if isAdmin() || (signedIn() && email == myEmail());
       allow create, update: if isAdmin()
         && request.resource.data.role in ['Admin', 'Designer']
         && email == email.lower();
+      // Admin cancels, or the invitee consumes it while creating their profile.
+      allow delete: if isAdmin() || (verified() && email == myEmail());
     }
 
     // ---------- Campaigns ----------
     match /campaigns/{id} {
       allow read: if hasProfile();
-      // coverFileId is written only by the backend upload endpoint
-      allow create: if isAdmin() && !('coverFileId' in request.resource.data);
-      allow update: if isAdmin() && !changed().hasAny(['coverFileId']);
-      allow delete: if isAdmin();
+      allow create, update, delete: if isAdmin();
     }
 
     // ---------- Tasks ----------
@@ -47,16 +72,12 @@ service cloud.firestore {
       function isAssignee() { return signedIn() && resource.data.assigneeId == request.auth.uid; }
 
       allow read: if isAdmin() || (hasProfile() && isAssignee());
-      allow create: if isAdmin()
-        && !request.resource.data.keys().hasAny(['fileId', 'fileName', 'fileMime']);
-      allow update: if isAdmin()
-        && !changed().hasAny(['fileId', 'fileName', 'fileMime']);
-      // Designers update their own progress but can never approve their own work.
+      allow create, update, delete: if isAdmin();
+      // Designers update their own progress / submission file, but can never approve.
       allow update: if hasProfile() && isAssignee()
-        && changed().hasOnly(['status', 'hours', 'submission', 'updatedAt'])
+        && changed().hasOnly(['status', 'hours', 'submission', 'fileId', 'fileName', 'fileMime', 'fileVersions', 'updatedAt'])
         && request.resource.data.status in ['To Do', 'In Progress', 'In Review', resource.data.status]
         && request.resource.data.hours is number && request.resource.data.hours >= 0;
-      allow delete: if isAdmin();
 
       // Pinned artwork corrections
       match /annotations/{annId} {
@@ -72,7 +93,7 @@ service cloud.firestore {
     // ---------- Activity log (append-only) ----------
     match /activity/{id} {
       allow read: if hasProfile();
-      allow create: if hasProfile()
+      allow create: if signedIn() && existsAfter(userPath(request.auth.uid))
         && request.resource.data.actorUid == request.auth.uid;
       allow update, delete: if false;
     }
@@ -85,14 +106,6 @@ service cloud.firestore {
         && request.resource.data.read == false;
       allow update: if signedIn() && resource.data.toUid == request.auth.uid
         && changed().hasOnly(['read']);
-    }
-
-    // Upload index — managed by the backend only
-    match /files/{id} {
-      allow read, write: if false;
-    }
-    match /meta/{id} {
-      allow read, write: if false;
     }
   }
 }

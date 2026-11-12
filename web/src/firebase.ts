@@ -24,13 +24,6 @@ export const db = initializeFirestore(firebaseApp, {
   localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
 });
 
-/** Functions SDK is only needed at first sign-in, so it is loaded on demand. */
-export async function callFunction<T = unknown>(name: string, data?: unknown): Promise<T> {
-  const { getFunctions, httpsCallable, connectFunctionsEmulator } = await import("firebase/functions");
-  const fns = getFunctions(firebaseApp, env.VITE_FUNCTIONS_REGION || "asia-south1");
-  if (env.VITE_USE_EMULATORS === "true") { try { connectFunctionsEmulator(fns, "127.0.0.1", 5001); } catch { /* already */ } }
-  return (await httpsCallable(fns, name)(data)).data as T;
-}
 
 if (env.VITE_USE_EMULATORS === "true") {
   connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
