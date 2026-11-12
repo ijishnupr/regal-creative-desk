@@ -117,7 +117,9 @@ function upload_(req) {
 function getFile_(req) {
   var id = String(req.id || '');
   if (!/^[\w-]+$/.test(id)) throw new Error('Bad file id');
-  var file = DriveApp.getFileById(id);
+  fsGet_(req.token, 'users/' + uid_(req.token)); // verify the sign-in before touching Drive
+  var file;
+  try { file = DriveApp.getFileById(id); } catch (e) { throw new Error('Not found'); }
   var m = /^regal:(task|cover):([\w-]+)/.exec(file.getDescription() || '');
   if (!m) throw new Error('Unknown file');
   // Authorisation = can this user read the owning document under Firestore rules?
