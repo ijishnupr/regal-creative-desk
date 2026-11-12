@@ -32,7 +32,11 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - run: npm ci
       - name: Build
+        env:
+          # Set in repo Settings -> Secrets and variables -> Actions -> Variables
+          VITE_STORAGE_URL: ${{ vars.VITE_STORAGE_URL }}
         run: |
+          if [ -z "$VITE_STORAGE_URL" ]; then echo "::warning::VITE_STORAGE_URL repo variable is not set — file uploads will be disabled"; fi
           # <user>.github.io repos (or a custom domain) serve from "/", project repos from "/<repo>/"
           REPO="${{ github.event.repository.name }}"
           if [[ "$REPO" == *.github.io ]] || [[ -n "${{ vars.PAGES_CUSTOM_DOMAIN }}" ]]; then BASE="/"; else BASE="/$REPO/"; fi
