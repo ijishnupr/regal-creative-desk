@@ -52,8 +52,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [users, uReady] = useLive<UserProfile>("users", [], true, []);
   const [tasks, tReady] = useLive<Task>("tasks", admin ? [] : [where("assigneeId", "==", me.id)], true, [admin, me.id]);
   const [invites] = useLive<Invite>("invites", [], admin, [admin]);
-  const [notifications] = useLive<Notification>("notifications",
-    [where("toUid", "==", me.id), orderBy("createdAt", "desc"), limit(100)], true, [me.id]);
+  const notifications = useNotifications(me.id);
   const [activity] = useLive<Activity>("activity", [orderBy("createdAt", "desc"), limit(150)], true, []);
 
   const value = useMemo<Data>(() => {
@@ -71,6 +70,39 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [campaigns, tasks, users, invites, notifications, activity, cReady, tReady, uReady]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+}
+
+/**
+ * Live notifications for one user. Prefers the indexed query (newest 100);
+ * if the composite index (toUid ↑, createdAt ↓) hasn't been created in the
+ * Firebase console yet, falls back to an unindexed query sorted on the device,
+ * so notifications always work.
+ */
+function useNotifications(uid: string) {
+  const [rows, setRows] = useState<Notification[]>([]);
+  useEffect(() => {
+    let unsub: (() => void) | undefined, timer: ReturnType<typeof setTimeout> | undefined, tries = 0;
+    const col = collection(db, "notifications");
+    const toRows = (docs: { id: string; data: (o: object) => object }[]) => docs
+      .map((d) => ({ id: d.id, ...d.data({ serverTimestamps: "estimate" }) }) as Notification)
+      .sort((a, b) => ts(b.createdAt) - ts(a.createdAt)).slice(0, 100);
+    const listen = (indexed: boolean) => {
+      const q = indexed
+        ? query(col, where("toUid", "==", uid), orderBy("createdAt", "desc"), limit(100))
+        : query(col, where("toUid", "==", uid));
+      unsub = onSnapshot(q, (snap) => { tries = 0; setRows(toRows(snap.docs)); }, (err) => {
+        if (indexed && err.code === "failed-precondition") {
+          console.warn("Notifications index missing — using fallback query. Create it via the link:", err.message);
+          listen(false);
+        } else if (tries < 6) {
+          timer = setTimeout(() => listen(indexed), 500 * 2 ** tries++);
+        }
+      });
+    };
+    listen(true);
+    return () => { unsub?.(); clearTimeout(timer); };
+  }, [uid]);
+  return rows;
 }
 
 /** Live annotations for one task (subcollection). */

@@ -1,15 +1,27 @@
 import { useNavigate } from "react-router-dom";
 import { actions, useData } from "../data";
-import { Empty, fmtTime, stagger } from "../components/ui";
+import { useState } from "react";
+import { Empty, fmtTime, stagger, useToast } from "../components/ui";
 
 export default function Notifications() {
   const { notifications } = useData();
   const nav = useNavigate();
+  const toast = useToast();
+  const supported = "Notification" in window;
+  const [perm, setPerm] = useState(supported ? Notification.permission : "denied");
   return (
     <>
       <div className="flex">
         <div><h2 className="sectiontitle">Notifications</h2><p className="muted">Submission alerts, correction requests, approvals and new assignments.</p></div>
-        <button className="btn tiny secondary" onClick={() => actions.markAllRead(notifications)}>Mark all read</button>
+        <div className="actions">
+          {supported && perm === "default" && (
+            <button className="btn tiny" onClick={async () => {
+              const p = await Notification.requestPermission(); setPerm(p);
+              toast(p === "granted" ? "Device alerts turned on" : "Alerts blocked in browser settings", p === "granted" ? "ok" : "err");
+            }}>🔔 Turn on device alerts</button>
+          )}
+          <button className="btn tiny secondary" onClick={() => actions.markAllRead(notifications)}>Mark all read</button>
+        </div>
       </div>
       <div className="card" style={{ marginTop: 14 }}>
         {notifications.length ? <div className="stagger">{notifications.map((n, i) => (

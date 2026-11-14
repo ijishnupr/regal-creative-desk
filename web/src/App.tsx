@@ -2,7 +2,7 @@ import React, { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { NavLink, Route, Routes, useLocation, useNavigate, Navigate } from "react-router-dom";
 import { useAuth } from "./auth";
 import { DataProvider, useData } from "./data";
-import { Avatar, Skeleton } from "./components/ui";
+import { Avatar, Skeleton, useToast } from "./components/ui";
 import Login from "./pages/Login";
 
 // Route-level code splitting; every chunk is precached by the service worker
@@ -76,6 +76,37 @@ function Shell() {
     if (unread > prevUnread.current) { setRing(true); setTimeout(() => setRing(false), 1400); }
     prevUnread.current = unread;
   }, [unread]);
+
+  // Pop-up alerts for notifications that arrive while the app is open.
+  const toast = useToast();
+  // "New" = unread, created after the last alert shown on this device (or this session's
+  // start, with a 15 s clock-skew margin), and not shown yet. Survives reloads.
+  const alertKey = `rcd-last-alert-${me.id}`;
+  const since = useRef<number>(0);
+  if (!since.current) {
+    let stored = 0;
+    try { stored = Number(localStorage.getItem(alertKey)) || 0; } catch { /* storage unavailable */ }
+    since.current = Math.max(stored, Date.now() - 15000);
+  }
+  const seen = useRef(new Set<string>());
+  useEffect(() => {
+    const at = (n: { createdAt?: { toMillis(): number } }) => n.createdAt?.toMillis?.() ?? Date.now();
+    const fresh = notifications.filter((n) => !n.read && !seen.current.has(n.id) && at(n) > since.current);
+    notifications.forEach((n) => seen.current.add(n.id));
+    if (fresh.length) {
+      since.current = Math.max(since.current, ...fresh.map(at));
+      try { localStorage.setItem(alertKey, String(since.current)); } catch { /* storage unavailable */ }
+    }
+    for (const n of fresh.slice(0, 3)) {
+      toast("🔔 " + n.message);
+      if (document.hidden && "Notification" in window && Notification.permission === "granted") {
+        navigator.serviceWorker?.getRegistration().then((reg) => {
+          const opts = { body: n.message, icon: `${import.meta.env.BASE_URL}icons/icon-192.png`, badge: `${import.meta.env.BASE_URL}icons/favicon-64.png`, tag: n.id };
+          if (reg) void reg.showNotification("Regal Creative Desk", opts); else new Notification("Regal Creative Desk", opts);
+        }).catch(() => undefined);
+      }
+    }
+  }, [notifications, toast, alertKey]);
   useEffect(() => {
     const on = () => setOnline(true), off = () => setOnline(false);
     addEventListener("online", on); addEventListener("offline", off);
