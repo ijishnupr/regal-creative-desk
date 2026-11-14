@@ -2,11 +2,15 @@ import { Link, useNavigate } from "react-router-dom";
 import { useData } from "../data";
 import { useMe } from "../auth";
 import { Bar, CountUp, Cover, Empty, Skeleton, hours, progress, stagger } from "../components/ui";
+import { isUpcoming } from "../types";
+import { UpcomingCard } from "./Campaigns";
 
 export default function Dashboard() {
   const me = useMe();
   const admin = me.role === "Admin";
-  const { campaigns, tasks, users, user, campaign, ready } = useData();
+  const { campaigns: all, tasks, users, user, campaign, ready } = useData();
+  const campaigns = all.filter((c) => !isUpcoming(c));
+  const upcoming = all.filter(isUpcoming).sort((a, b) => (a.startDate ?? "").localeCompare(b.startDate ?? ""));
   const nav = useNavigate();
   const stats: [string, number][] = [
     ["Active Campaigns", campaigns.length],
@@ -62,6 +66,18 @@ export default function Dashboard() {
           })}
           {!designers.length && <Empty>No designers yet</Empty>}
         </div>
+      </div>
+      <div className="card" style={{ marginTop: 15 }}>
+        <div className="flex">
+          <h3 className="sectiontitle">📅 Upcoming campaigns</h3>
+          <div className="actions">
+            {admin && <Link className="btn tiny" to="/campaigns/new?upcoming=1">+ Plan</Link>}
+            <Link className="btn tiny secondary" to="/campaigns?view=upcoming">View all →</Link>
+          </div>
+        </div>
+        {upcoming.length
+          ? <div className="stagger upcoming-list">{upcoming.slice(0, 4).map((c, i) => <UpcomingCard key={c.id} c={c} i={i} compact />)}</div>
+          : <Empty>No upcoming campaigns planned{admin && <> — <Link to="/campaigns/new?upcoming=1">plan one</Link></>}</Empty>}
       </div>
       <div className="twocol">
         <div className="card">

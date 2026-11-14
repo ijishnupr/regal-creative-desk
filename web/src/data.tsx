@@ -1,11 +1,11 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   collection, doc, onSnapshot, query, where, orderBy, limit, writeBatch, serverTimestamp,
-  updateDoc, setDoc, deleteDoc, arrayUnion, type QueryConstraint, type WriteBatch,
+  updateDoc, setDoc, deleteDoc, type QueryConstraint, type WriteBatch,
 } from "firebase/firestore";
 import { db } from "./firebase";
 import { useMe } from "./auth";
-import type { Activity, Annotation, Campaign, Invite, Notification, Status, Task, UserProfile } from "./types";
+import type { Activity, Campaign, Invite, LinkItem, Message, Notification, Status, Task, UserProfile } from "./types";
 
 interface Data {
   campaigns: Campaign[]; tasks: Task[]; users: UserProfile[]; invites: Invite[];
@@ -105,15 +105,19 @@ function useNotifications(uid: string) {
   return rows;
 }
 
-/** Live annotations for one task (subcollection). */
-export function useAnnotations(taskId?: string) {
-  const [rows, setRows] = useState<Annotation[]>([]);
+/** Live chat messages for one task (subcollection), oldest first. */
+export function useMessages(taskId?: string) {
+  const [rows, setRows] = useState<Message[]>([]);
+  const [ready, setReady] = useState(false);
   useEffect(() => {
     if (!taskId) return;
-    return onSnapshot(query(collection(db, "tasks", taskId, "annotations"), orderBy("createdAt", "asc")), (snap) =>
-      setRows(snap.docs.map((d) => ({ id: d.id, ...d.data({ serverTimestamps: "estimate" }) }) as Annotation)));
+    setRows([]); setReady(false);
+    return onSnapshot(query(collection(db, "tasks", taskId, "messages"), orderBy("createdAt", "asc"), limit(500)), (snap) => {
+      setRows(snap.docs.map((d) => ({ id: d.id, ...d.data({ serverTimestamps: "estimate" }) }) as Message));
+      setReady(true);
+    }, (err) => { console.warn("messages", err.code); setReady(true); });
   }, [taskId]);
-  return rows;
+  return [rows, ready] as const;
 }
 
 // ------------------------------------------------------------------
@@ -141,13 +145,40 @@ function fire(b: WriteBatch, onError?: (e: Error) => void) {
 }
 
 export const actions = {
-  createCampaign(me: Me, c: Omit<Campaign, "id" | "createdAt" | "coverFileId">, onError?: (e: Error) => void) {
+  /** Returns the new id at once, plus a promise that resolves when the server has it (needed before uploading a cover). */
+  createCampaign(me: Me, c: Omit<Campaign, "id" | "createdAt" | "coverFileId">) {
     const id = newId("campaigns");
     const b = writeBatch(db);
     b.set(doc(db, "campaigns", id), { ...c, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
-    log(b, me, `Campaign ${c.name} created`, id);
+    log(b, me, c.stage === "Upcoming" ? `Upcoming campaign ${c.name} planned for ${c.startDate}` : `Campaign ${c.name} created`, id);
+    return { id, saved: b.commit() };
+  },
+  startCampaign(me: Me, c: Campaign) {
+    const b = writeBatch(db);
+    b.update(doc(db, "campaigns", c.id), { stage: "Active", updatedAt: serverTimestamp() });
+    log(b, me, `Campaign ${c.name} started`, c.id);
+    return b.commit();
+  },
+  setReferences(taskId: string, references: LinkItem[], onError?: (e: Error) => void) {
+    updateDoc(doc(db, "tasks", taskId), { references, updatedAt: serverTimestamp() }).catch((e) => onError?.(e));
+  },
+  setDeliverables(me: Me, users: UserProfile[], t: Task, deliverables: LinkItem[], onError?: (e: Error) => void) {
+    const b = writeBatch(db);
+    b.update(doc(db, "tasks", t.id), { deliverables, updatedAt: serverTimestamp() });
+    if (deliverables.length > (t.deliverables?.length ?? 0)) {
+      const to = me.role === "Admin" ? [t.assigneeId] : admins(users);
+      notify(b, me, to, t.id, `${me.name} added the final file link for ${t.title}`);
+      log(b, me, `Final file link added to ${t.title}`, t.campaignId);
+    }
     fire(b, onError);
-    return id;
+  },
+  sendMessage(me: Me, users: UserProfile[], t: Task, text: string, onError?: (e: Error) => void) {
+    const b = writeBatch(db);
+    b.set(doc(collection(db, "tasks", t.id, "messages")), { text, authorUid: me.id, authorName: me.name, createdAt: serverTimestamp() });
+    const preview = text.length > 80 ? text.slice(0, 77) + "…" : text;
+    const to = me.role === "Admin" ? [t.assigneeId, ...admins(users)] : admins(users);
+    notify(b, me, to, t.id, `💬 ${me.name} · ${t.title}: ${preview}`);
+    fire(b, onError);
   },
   updateCampaign(id: string, patch: Partial<Campaign>) {
     return updateDoc(doc(db, "campaigns", id), { ...patch, updatedAt: serverTimestamp() });
@@ -185,32 +216,10 @@ export const actions = {
     log(b, me, `${t.title} marked ${status}`, t.campaignId);
     fire(b, onError);
   },
-  attachTaskFile(me: Me, taskId: string, fileId: string, fileName: string, fileMime: string, onError?: (e: Error) => void) {
-    updateDoc(doc(db, "tasks", taskId), {
-      fileId, fileName, fileMime, updatedAt: serverTimestamp(),
-      fileVersions: arrayUnion({ fileId, fileName, at: Date.now(), by: me.id }),
-    }).catch((e) => onError?.(e));
-  },
   setCover(campaignId: string, fileId: string, onError?: (e: Error) => void) {
     updateDoc(doc(db, "campaigns", campaignId), { coverFileId: fileId, updatedAt: serverTimestamp() }).catch((e) => onError?.(e));
   },
   deleteTask(id: string) { return deleteDoc(doc(db, "tasks", id)); },
-  addAnnotation(me: Me, t: Task, x: number, y: number, text: string, onError?: (e: Error) => void) {
-    const b = writeBatch(db);
-    b.set(doc(collection(db, "tasks", t.id, "annotations")), { x, y, text, authorName: me.name, authorUid: me.id, resolved: false, createdAt: serverTimestamp() });
-    if (t.status !== "Revisions") b.update(doc(db, "tasks", t.id), { status: "Revisions", updatedAt: serverTimestamp() });
-    notify(b, me, [t.assigneeId], t.id, `New pinned correction on ${t.title}: ${text}`);
-    log(b, me, `${me.name} added an artwork correction to ${t.title}`, t.campaignId);
-    fire(b, onError);
-  },
-  resolveAnnotation(me: Me, users: UserProfile[], t: Task, annId: string, onError?: (e: Error) => void) {
-    const b = writeBatch(db);
-    b.update(doc(db, "tasks", t.id, "annotations", annId), { resolved: true, resolvedAt: serverTimestamp(), resolvedBy: me.id });
-    notify(b, me, admins(users), t.id, `${me.name} marked artwork correction resolved on ${t.title}`);
-    log(b, me, `Artwork correction resolved: ${t.title}`, t.campaignId);
-    fire(b, onError);
-  },
-  deleteAnnotation(t: Task, annId: string) { return deleteDoc(doc(db, "tasks", t.id, "annotations", annId)); },
   invite(email: string, name: string, role: "Admin" | "Designer") {
     const e = email.trim().toLowerCase();
     return setDoc(doc(db, "invites", e), { email: e, name: name.trim(), role, createdAt: serverTimestamp() });

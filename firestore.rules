@@ -73,20 +73,25 @@ service cloud.firestore {
 
       allow read: if isAdmin() || (hasProfile() && isAssignee());
       allow create, update, delete: if isAdmin();
-      // Designers update their own progress / submission file, but can never approve.
+      // Designers update their own progress and final-file links, but can never approve.
       allow update: if hasProfile() && isAssignee()
-        && changed().hasOnly(['status', 'hours', 'submission', 'fileId', 'fileName', 'fileMime', 'fileVersions', 'updatedAt'])
+        && changed().hasOnly(['status', 'hours', 'submission', 'deliverables', 'updatedAt'])
         && request.resource.data.status in ['To Do', 'In Progress', 'In Review', resource.data.status]
-        && request.resource.data.hours is number && request.resource.data.hours >= 0;
+        && request.resource.data.hours is number && request.resource.data.hours >= 0
+        && (!('deliverables' in request.resource.data) || (request.resource.data.deliverables is list && request.resource.data.deliverables.size() <= 30));
 
-      // Pinned artwork corrections
-      match /annotations/{annId} {
+      // Task chat between admins and the assigned designer (append-only).
+      match /messages/{msgId} {
         function task() { return get(/databases/$(database)/documents/tasks/$(id)).data; }
-        allow read: if isAdmin() || (hasProfile() && task().assigneeId == request.auth.uid);
-        allow create, delete: if isAdmin();
-        allow update: if isAdmin()
-          || (hasProfile() && task().assigneeId == request.auth.uid
-              && changed().hasOnly(['resolved', 'resolvedAt', 'resolvedBy']));
+        function member() { return isAdmin() || (hasProfile() && task().assigneeId == request.auth.uid); }
+        allow read: if member();
+        allow create: if member()
+          && request.resource.data.keys().hasOnly(['text', 'authorUid', 'authorName', 'createdAt'])
+          && request.resource.data.authorUid == request.auth.uid
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 4000
+          && request.resource.data.createdAt == request.time;
+        allow update, delete: if false;
       }
     }
 

@@ -3,7 +3,11 @@ import { useData } from "../data";
 import { useMe } from "../auth";
 import { Bar, Cover, Empty, Skeleton, fmtTime, hours, progress, stagger } from "../components/ui";
 import { SubmissionCards, TaskTable } from "../components/tasks";
-import { Upload } from "../components/Upload";
+import { CoverUpload } from "../components/Upload";
+import { actions } from "../data";
+import { useToast } from "../components/ui";
+import { isUpcoming } from "../types";
+import { countdown } from "./Campaigns";
 
 const TABS = [["tasks", "All Tasks"], ["brief", "Content Brief"], ["employees", "Employees"], ["submissions", "Submissions"], ["activity", "Activity"]] as const;
 
@@ -11,7 +15,9 @@ export default function CampaignDetail() {
   const { id } = useParams();
   const [sp, setSp] = useSearchParams();
   const tab = sp.get("tab") || "tasks";
-  const admin = useMe().role === "Admin";
+  const me = useMe();
+  const admin = me.role === "Admin";
+  const toast = useToast();
   const { campaign, tasks, users, activity, ready } = useData();
   const nav = useNavigate();
   const c = campaign(id);
@@ -24,7 +30,9 @@ export default function CampaignDetail() {
       <div className="card detailhead" style={{ marginTop: 13 }}>
         <Cover c={c} />
         <div>
-          <span className="pill">Campaign Workspace</span>
+          {isUpcoming(c)
+            ? <span className="pill warn">📅 Upcoming · {countdown(c.startDate)} · {c.startDate}</span>
+            : <span className="pill">Campaign Workspace{c.startDate ? ` · ${c.startDate}${c.endDate ? " → " + c.endDate : ""}` : ""}</span>}
           <h2>{c.name}</h2>
           <p className="muted">{c.description}</p>
           <p><b>Key message:</b> {c.objective}</p>
@@ -33,7 +41,8 @@ export default function CampaignDetail() {
           {admin && (
             <div className="actions" style={{ marginTop: 12 }}>
               <button className="btn tiny" onClick={() => nav(`/tasks/new?campaign=${c.id}`)}>+ Assign Campaign Task</button>
-              <Upload compact kind="cover" id={c.id} accept="image/*" label="Upload Campaign Cover" />
+              <CoverUpload campaignId={c.id} label={c.coverFileId ? "Change Cover" : "Upload Campaign Cover"} />
+              {isUpcoming(c) && <button className="btn tiny secondary" onClick={() => actions.startCampaign(me, c).then(() => toast(`${c.name} is now active`), (e) => toast(e.message, "err"))}>Start now</button>}
             </div>
           )}
         </div>
@@ -67,7 +76,7 @@ export default function CampaignDetail() {
             {!ts.length && <Empty>No designers assigned yet</Empty>}
           </div>
         )}
-        {tab === "submissions" && <SubmissionCards tasks={ts.filter((t) => t.submission || t.fileId)} />}
+        {tab === "submissions" && <SubmissionCards tasks={ts.filter((t) => t.submission || t.fileId || t.deliverables?.length)} />}
         {tab === "activity" && (() => {
           const acts = activity.filter((a) => a.campaignId === c.id);
           return acts.length ? <div className="card"><div className="timeline stagger">{acts.map((a, i) => <p key={a.id} style={stagger(i)}>{a.text}<br /><span className="muted">{fmtTime(a.createdAt)}</span></p>)}</div></div>

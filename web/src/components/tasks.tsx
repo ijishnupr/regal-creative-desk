@@ -4,6 +4,7 @@ import { useMe } from "../auth";
 import type { Task } from "../types";
 import { DriveMedia, Empty, Pill, fmtDate, overdue, stagger, useToast } from "./ui";
 import { prefetchFile } from "../api";
+import { driveId } from "./Links";
 
 export function TaskTable({ tasks, showCampaign = true }: { tasks: Task[]; showCampaign?: boolean }) {
   const { user, campaign } = useData();
@@ -30,6 +31,14 @@ export function TaskTable({ tasks, showCampaign = true }: { tasks: Task[]; showC
   );
 }
 
+function FinalPreview({ url, fallback }: { url: string; fallback: string }) {
+  const id = driveId(url);
+  return id
+    ? <img src={`https://drive.google.com/thumbnail?id=${id}&sz=w600`} alt="Final file" referrerPolicy="no-referrer" loading="lazy"
+        onError={(e) => { const p = e.currentTarget.parentElement; e.currentTarget.remove(); if (p) p.textContent = "🔗 " + fallback; }} />
+    : <span>🔗 {fallback}</span>;
+}
+
 export function SubmissionCards({ tasks }: { tasks: Task[] }) {
   const { user, campaign } = useData();
   const me = useMe();
@@ -42,7 +51,8 @@ export function SubmissionCards({ tasks }: { tasks: Task[] }) {
       {tasks.map((t, i) => (
         <div className="card" key={t.id} style={stagger(i)}>
           <div className="art" onClick={() => nav(`/tasks/${t.id}`)} style={{ cursor: "pointer" }}>
-            {t.fileId ? <DriveMedia fileId={t.fileId} mime={t.fileMime} alt="Design submission" /> : (t.submission || "AWAITING DESIGN")}
+            {t.deliverables?.length ? <FinalPreview url={t.deliverables[0].url} fallback={t.submission || "FINAL FILE LINKED"} />
+              : t.fileId ? <DriveMedia fileId={t.fileId} mime={t.fileMime} alt="Design submission" /> : (t.submission || "AWAITING DESIGN")}
           </div>
           <h3 style={{ fontSize: 14, marginBottom: 4 }}>{t.title}</h3>
           <p className="muted" style={{ marginTop: 0 }}>{user(t.assigneeId)?.name} · {campaign(t.campaignId)?.name}</p>

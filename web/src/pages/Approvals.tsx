@@ -7,7 +7,7 @@ export default function Approvals() {
   const admin = useMe().role === "Admin";
   const { tasks } = useData();
   const [f, setF] = useState(admin ? "In Review" : "all");
-  const all = tasks.filter((t) => t.submission || t.fileId || t.status === "In Review");
+  const all = tasks.filter((t) => t.submission || t.fileId || t.deliverables?.length || t.status === "In Review");
   const ts = f === "all" ? all : all.filter((t) => t.status === f);
   return (
     <>
