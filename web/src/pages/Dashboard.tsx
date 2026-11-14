@@ -85,7 +85,7 @@ export default function Dashboard() {
           <div className="flex"><h3 className="sectiontitle">Campaigns</h3><Link className="btn tiny secondary" to="/campaigns">View all →</Link></div>
           <div className="cover-thumbs stagger">
             {campaigns.map((c, i) => (
-              <VLink className="campaigncard" to={`/campaigns/${c.id}`} key={c.id} style={stagger(i)}>
+              <VLink className="campaigncard" to={`/campaigns/${c.id}`} key={c.id} style={stagger(i)} morph={c.id}>
                 <Cover c={c} /><b className="mini">{c.name}</b>
               </VLink>
             ))}
@@ -97,7 +97,7 @@ export default function Dashboard() {
             <div className="item click" key={t.id} style={stagger(i)} onClick={() => nav(`/tasks/${t.id}`)}>
               <b>{t.title}</b><div className="muted">{user(t.assigneeId)?.name} · {campaign(t.campaignId)?.name}</div>
             </div>
-          ))}</div> : <Empty>{admin ? "No designs awaiting review" : "Nothing to correct 🎉"}</Empty>}
+          ))}</div> : <Empty>{admin ? "No designs awaiting review" : "Nothing to correct"}</Empty>}
         </div>
       </div>
     </>

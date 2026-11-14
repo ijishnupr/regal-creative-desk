@@ -1,24 +1,64 @@
 import { useCallback, useLayoutEffect, useRef, useState, type MouseEvent, type ReactNode, type CSSProperties } from "react";
-import { flushSync } from "react-dom";
-import { Link, useNavigate, type To } from "react-router-dom";
+import { Link, useLocation, useNavigate, type To } from "react-router-dom";
 
 const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 type VTDoc = Document & { startViewTransition?: (cb: () => void) => { finished: Promise<void> } };
 
 /** Run a DOM update inside a View Transition when the browser supports it. */
-export function withViewTransition(update: () => void) {
-  const d = document as VTDoc;
-  if (!d.startViewTransition || reduced()) { update(); return; }
-  const root = document.documentElement;
-  root.classList.add("vt");
-  const t = d.startViewTransition(() => flushSync(update));
-  t.finished.finally(() => root.classList.remove("vt"));
+type VTDocAsync = Document & { startViewTransition?: (cb: () => Promise<void> | void) => { finished: Promise<void> } };
+
+let vtActive = false;
+let waiter: { path: string; done: () => void } | null = null;
+/** True while a view transition is rendering the next page (that page then skips its own fade-in). */
+export const inViewTransition = () => vtActive;
+
+/** Wait (briefly) until no route fallback skeleton is on screen, i.e. the real page has rendered. */
+function whenPageRendered(maxMs = 500) {
+  return new Promise<void>((resolve) => {
+    const start = performance.now();
+    const check = () => (!document.querySelector("[data-route-fallback]") || performance.now() - start > maxMs) ? resolve() : requestAnimationFrame(check);
+    check();
+  });
 }
+
+/** Called by the app shell after a route has committed to the DOM. */
+export function notifyRouteCommitted(path: string) {
+  if (waiter && waiter.path === path) {
+    const w = waiter; waiter = null;
+    void whenPageRendered().then(w.done);
+  }
+}
+
+/**
+ * Run a navigation inside a View Transition. The router renders route changes
+ * asynchronously, so the transition waits until the new page has actually
+ * committed (and its code has loaded) before animating; otherwise it would
+ * animate old→old and the real page would pop in afterwards (flicker).
+ */
+export function withViewTransition(update: () => void, path: string) {
+  const d = document as VTDocAsync;
+  if (!d.startViewTransition || reduced()) { update(); return; }
+  const t = d.startViewTransition(() => new Promise<void>((resolve) => {
+    vtActive = true;
+    const done = () => { vtActive = false; resolve(); };
+    waiter = { path, done };
+    setTimeout(() => { if (waiter?.done === done) { waiter = null; done(); } }, 800); // safety net
+    update();
+  }));
+  t.finished.catch(() => undefined);
+}
+
+const pathOf = (to: To) => (typeof to === "string" ? to : to.pathname ?? "").split(/[?#]/)[0] || "/";
 
 /** navigate() with a fluid page transition (cross-fade + shared campaign covers). */
 export function useVTNavigate() {
   const navigate = useNavigate();
-  return useCallback((to: To) => withViewTransition(() => navigate(to)), [navigate]);
+  const loc = useLocation();
+  return useCallback((to: To) => {
+    const path = pathOf(to);
+    if (path === loc.pathname) { navigate(to); return; } // same page (e.g. only the query changes)
+    withViewTransition(() => navigate(to), path);
+  }, [navigate, loc.pathname]);
 }
 
 /** onClick for <Link>/<NavLink>: keeps normal behaviour for new-tab clicks. */
@@ -31,15 +71,30 @@ export function useVTClick() {
   }, [vnav]);
 }
 
-export function VLink({ to, children, className, style, onMouseEnter }: {
+export function VLink({ to, children, className, style, onMouseEnter, morph }: {
   to: string; children: ReactNode; className?: string; style?: CSSProperties; onMouseEnter?: () => void;
+  /** Campaign id whose cover should morph into the next page. */
+  morph?: string;
 }) {
   const click = useVTClick();
-  return <Link to={to} className={className} style={style} onMouseEnter={onMouseEnter} onClick={(e) => click(e, to)}>{children}</Link>;
+  return <Link to={to} className={className} style={style} onMouseEnter={onMouseEnter}
+    onClick={(e) => { if (morph) startCoverMorph(morph, e.currentTarget); click(e, to); }}>{children}</Link>;
 }
 
-/** Shared-element name so a campaign cover morphs between pages. */
-export const coverVT = (id: string): CSSProperties => ({ viewTransitionName: `cover-${id}` } as CSSProperties);
+/**
+ * Shared-element morph for campaign covers. Only ONE cover may carry the name
+ * (the campaign being opened / returned from); others would float as ghosts.
+ */
+let morphId: string | null = null;
+export const getMorphId = () => morphId;
+export const coverVT = (id: string, always = false): CSSProperties =>
+  (always || id === morphId ? { viewTransitionName: `cover-${id}` } : {}) as CSSProperties;
+/** Tag the clicked card's cover right before the transition snapshots the old page. */
+export function startCoverMorph(id: string, card: HTMLElement | null) {
+  morphId = id;
+  const cover = card?.querySelector<HTMLElement>(".cover");
+  if (cover) cover.style.setProperty("view-transition-name", `cover-${id}`);
+}
 
 /**
  * Measures the active child (selector) inside a container and returns the

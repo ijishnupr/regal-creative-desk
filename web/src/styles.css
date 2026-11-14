@@ -358,7 +358,7 @@ a { color: var(--maroon); }
 ::view-transition-old(root) { animation: vtOut .2s var(--ease) both; }
 ::view-transition-new(root) { animation: vtIn .38s var(--ease) both; }
 ::view-transition-group(*) { animation-duration: .45s; animation-timing-function: cubic-bezier(.2, .9, .25, 1); }
-.vt .page { animation: none; }
+.page.no-anim { animation: none; }
 @keyframes vtOut { to { opacity: 0; transform: translateY(-6px) scale(.995); } }
 @keyframes vtIn { from { opacity: 0; transform: translateY(14px) scale(.995); } }
 

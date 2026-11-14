@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
-import { fileUrl } from "../api";
+import { fileUrl, peekFileUrl } from "../api";
+import { coverVT } from "./motion";
 import type { Campaign } from "../types";
 
 export const esc = (s: unknown) => String(s ?? "");
@@ -41,10 +42,14 @@ export function CountUp({ value }: { value: number }) {
 export function DriveMedia({ fileId, mime, alt, className, style, onLoad }: {
   fileId: string; mime?: string; alt: string; className?: string; style?: CSSProperties; onLoad?: () => void;
 }) {
-  const [url, setUrl] = useState<string | null>(null);
+  const cached = peekFileUrl(fileId);
+  const [url, setUrl] = useState<string | null>(cached);
   const [err, setErr] = useState<string | null>(null);
-  const [loaded, setLoaded] = useState(false);
+  // Images seen before paint instantly (no fade-in), which keeps page transitions flicker-free.
+  const [loaded, setLoaded] = useState(!!cached);
   useEffect(() => {
+    const hit = peekFileUrl(fileId);
+    if (hit) { setUrl(hit); setLoaded(true); setErr(null); return; }
     let alive = true;
     setUrl(null); setErr(null); setLoaded(false);
     fileUrl(fileId).then((u) => alive && setUrl(u)).catch((e) => alive && setErr(e.message));
@@ -58,9 +63,9 @@ export function DriveMedia({ fileId, mime, alt, className, style, onLoad }: {
     onLoad={() => { setLoaded(true); onLoad?.(); }} />;
 }
 
-export function Cover({ c }: { c: Campaign }) {
+export function Cover({ c, hero }: { c: Campaign; hero?: boolean }) {
   return (
-    <div className="cover" style={{ background: c.color || "#71846d", viewTransitionName: `cover-${c.id}` } as CSSProperties}>
+    <div className="cover" style={{ background: c.color || "#71846d", ...coverVT(c.id, hero) }}>
       {c.coverFileId
         ? <DriveMedia fileId={c.coverFileId} alt="Campaign cover" className="cover-img" />
         : <div className="cover-text"><b>{c.label || "REGAL"}</b><span>REGAL JEWELLERS</span></div>}

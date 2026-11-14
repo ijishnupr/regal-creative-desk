@@ -29,7 +29,7 @@ export default function CampaignDetail() {
     <>
       <VLink className="btn secondary tiny" to="/campaigns">← Campaigns</VLink>
       <div className="card detailhead" style={{ marginTop: 13 }}>
-        <Cover c={c} />
+        <Cover c={c} hero />
         <div>
           {isUpcoming(c)
             ? <span className="pill warn">📅 Upcoming · {countdown(c.startDate)} · {c.startDate}</span>

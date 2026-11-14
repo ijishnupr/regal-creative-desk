@@ -1,5 +1,5 @@
 import React, { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { useSlidingIndicator, useVTClick, useVTNavigate } from "./components/motion";
+import { inViewTransition, notifyRouteCommitted, useSlidingIndicator, useVTClick, useVTNavigate } from "./components/motion";
 import { NavLink, Route, Routes, useLocation, useNavigate, Navigate } from "react-router-dom";
 import { useAuth } from "./auth";
 import { DataProvider, useData } from "./data";
@@ -70,8 +70,12 @@ function Shell() {
   const prevUnread = useRef(unread);
   const [ring, setRing] = useState(false);
   const [title, subtitle] = titleFor(loc.pathname, admin);
+  // Decide once per page whether it plays its own entrance animation. Pages arriving via a
+  // view transition are already animated by it; toggling this later would replay the fade (flicker).
+  const enter = useRef({ path: "", cls: "page" });
+  if (enter.current.path !== loc.pathname) enter.current = { path: loc.pathname, cls: inViewTransition() ? "page no-anim" : "page" };
 
-  useLayoutEffect(() => { setOpen(false); window.scrollTo({ top: 0 }); }, [loc.pathname]);
+  useLayoutEffect(() => { setOpen(false); window.scrollTo({ top: 0 }); notifyRouteCommitted(loc.pathname); }, [loc.pathname]);
   const vclick = useVTClick();
   const vnav = useVTNavigate();
   const [sideRef, sideInd] = useSlidingIndicator<HTMLElement>(".navbtn.active", [loc.pathname, admin], "y");
@@ -152,7 +156,7 @@ function Shell() {
         {!online && <div className="offline">You're offline — changes are saved on this device and will sync automatically.</div>}
         <header className="top">
           <button className="burger" onClick={() => setOpen(true)} aria-label="Open menu">☰</button>
-          <div className="titles"><h1 key={title} className="page">{title}</h1><small>{subtitle}</small></div>
+          <div className="titles"><h1 key={title} className={enter.current.cls}>{title}</h1><small>{subtitle}</small></div>
           <div className="right">
             <button className={"bell" + (ring ? " ring" : "")} onClick={() => vnav("/notifications")} title="Notifications">
               <span className="bell-ico">🔔</span>{unread > 0 && <span className="badge" key={unread}>{unread}</span>}
@@ -160,8 +164,8 @@ function Shell() {
           </div>
         </header>
         <main className="content">
-          <Suspense fallback={<div className="page"><Skeleton h={28} w={240} /><div style={{ height: 14 }} /><Skeleton h={180} /></div>}>
-            <div key={loc.pathname} className="page">
+          <Suspense fallback={<div className="page" data-route-fallback><Skeleton h={28} w={240} /><div style={{ height: 14 }} /><Skeleton h={180} /></div>}>
+            <div key={loc.pathname} className={enter.current.cls}>
               <Routes location={loc}>
                 <Route path="/" element={<L.Dashboard />} />
                 <Route path="/campaigns" element={<L.Campaigns />} />

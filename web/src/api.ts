@@ -11,6 +11,9 @@ const STORAGE_URL = (import.meta.env.VITE_STORAGE_URL || "").trim();
 const CACHE = "regal-drive-files-v1";
 const cacheKey = (id: string) => `${location.origin}/__drive-cache/${id}`;
 const memory = new Map<string, Promise<string>>();
+const resolved = new Map<string, string>();
+/** Already-loaded object URL for a file (synchronous), so revisits render without a placeholder flash. */
+export const peekFileUrl = (fileId: string) => resolved.get(fileId) ?? null;
 
 async function token() {
   const u = auth.currentUser;
@@ -61,7 +64,7 @@ export function fileUrl(fileId: string): Promise<string> {
     if (cache) await cache.put(cacheKey(fileId), new Response(blob, { headers: { "Content-Type": mime } })).catch(() => undefined);
     return URL.createObjectURL(blob);
   })();
-  p.catch(() => memory.delete(fileId));
+  p.then((u) => resolved.set(fileId, u), () => memory.delete(fileId));
   memory.set(fileId, p);
   return p;
 }
@@ -71,6 +74,7 @@ export function prefetchFile(fileId?: string) { if (fileId) void fileUrl(fileId)
 
 export async function clearFileCache() {
   memory.clear();
+  resolved.clear();
   if ("caches" in window) await caches.delete(CACHE).catch(() => undefined);
 }
 

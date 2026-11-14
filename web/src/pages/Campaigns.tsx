@@ -74,7 +74,7 @@ export default function Campaigns() {
               {active.map((c, i) => {
                 const ts = tasks.filter((t) => t.campaignId === c.id), p = progress(ts);
                 return (
-                  <VLink className="card campaigncard" to={`/campaigns/${c.id}`} key={c.id} style={stagger(i)}>
+                  <VLink className="card campaigncard" to={`/campaigns/${c.id}`} key={c.id} style={stagger(i)} morph={c.id}>
                     <Cover c={c} />
                     <h3 style={{ fontSize: 15, margin: "13px 0 6px" }}>{c.name}</h3>
                     <p className="muted">{c.description}</p>
