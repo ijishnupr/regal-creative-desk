@@ -1,3 +1,4 @@
+import { useVTNavigate, VLink, TabBar } from "../components/motion";
 import { Link, useNavigate } from "react-router-dom";
 import { useData } from "../data";
 import { useMe } from "../auth";
@@ -11,7 +12,7 @@ export default function Dashboard() {
   const { campaigns: all, tasks, users, user, campaign, ready } = useData();
   const campaigns = all.filter((c) => !isUpcoming(c));
   const upcoming = all.filter(isUpcoming).sort((a, b) => (a.startDate ?? "").localeCompare(b.startDate ?? ""));
-  const nav = useNavigate();
+  const nav = useVTNavigate();
   const stats: [string, number][] = [
     ["Active Campaigns", campaigns.length],
     [admin ? "Assigned Tasks" : "My Tasks", tasks.length],
@@ -82,11 +83,11 @@ export default function Dashboard() {
       <div className="twocol">
         <div className="card">
           <div className="flex"><h3 className="sectiontitle">Campaigns</h3><Link className="btn tiny secondary" to="/campaigns">View all →</Link></div>
-          <div className="campaigns stagger" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(145px,1fr))" }}>
+          <div className="cover-thumbs stagger">
             {campaigns.map((c, i) => (
-              <Link className="campaigncard" to={`/campaigns/${c.id}`} key={c.id} style={stagger(i)}>
-                <Cover c={c} height={120} /><b className="mini">{c.name}</b>
-              </Link>
+              <VLink className="campaigncard" to={`/campaigns/${c.id}`} key={c.id} style={stagger(i)}>
+                <Cover c={c} /><b className="mini">{c.name}</b>
+              </VLink>
             ))}
           </div>
         </div>

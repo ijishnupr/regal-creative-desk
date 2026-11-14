@@ -1,3 +1,4 @@
+import { useVTNavigate, VLink, TabBar } from "../components/motion";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useData } from "../data";
 import { useMe } from "../auth";
@@ -19,14 +20,14 @@ export default function CampaignDetail() {
   const admin = me.role === "Admin";
   const toast = useToast();
   const { campaign, tasks, users, activity, ready } = useData();
-  const nav = useNavigate();
+  const nav = useVTNavigate();
   const c = campaign(id);
   if (!c) return ready.campaigns ? <div className="card"><Empty>Campaign not found. <Link to="/campaigns">Back</Link></Empty></div> : <Skeleton h={220} />;
   const ts = tasks.filter((t) => t.campaignId === c.id), p = progress(ts);
 
   return (
     <>
-      <Link className="btn secondary tiny" to="/campaigns">← Campaigns</Link>
+      <VLink className="btn secondary tiny" to="/campaigns">← Campaigns</VLink>
       <div className="card detailhead" style={{ marginTop: 13 }}>
         <Cover c={c} />
         <div>
@@ -47,9 +48,7 @@ export default function CampaignDetail() {
           )}
         </div>
       </div>
-      <div className="tabbar">
-        {TABS.map(([k, l]) => <button key={k} className={tab === k ? "active" : ""} onClick={() => setSp({ tab: k }, { replace: true })}>{l}</button>)}
-      </div>
+      <TabBar tabs={TABS} value={tab as (typeof TABS)[number][0]} onChange={(k) => setSp({ tab: k }, { replace: true })} />
       <div key={tab} className="page">
         {tab === "tasks" && <TaskTable tasks={ts} showCampaign={false} />}
         {tab === "brief" && (

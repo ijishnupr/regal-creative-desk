@@ -26,11 +26,13 @@ a { color: var(--maroon); }
 .side nav { position: relative; }
 .navbtn { position: relative; display: flex; gap: 12px; align-items: center; width: 100%; border: 0; background: none; color: #e7cdd2; text-align: left; padding: 12px 13px; border-radius: 9px; margin: 2px 0; text-decoration: none; transition: background .2s var(--ease), color .2s, transform .2s var(--ease); }
 .navbtn .ico { width: 18px; text-align: center; transition: transform .25s var(--spring); }
-.navbtn:hover { background: #6e1428; color: #fff; }
+.navbtn:hover { background: #ffffff12; color: #fff; }
 .navbtn:hover .ico { transform: scale(1.18); }
 .navbtn:active { transform: scale(.97); }
-.navbtn.active { background: var(--maroon-2); color: #fff; }
-.navbtn.active::before { content: ""; position: absolute; left: -14px; top: 9px; bottom: 9px; width: 4px; border-radius: 0 4px 4px 0; background: var(--gold); animation: grow .3s var(--ease); }
+.navbtn.active { color: #fff; }
+.side nav .navbtn { z-index: 1; }
+.nav-ind { position: absolute; left: 0; right: 0; top: 0; border-radius: 9px; background: var(--maroon-2); box-shadow: 0 6px 18px #0003; transition: transform .45s var(--spring), height .3s var(--ease), opacity .2s; pointer-events: none; }
+.nav-ind::before { content: ""; position: absolute; left: -14px; top: 9px; bottom: 9px; width: 4px; border-radius: 0 4px 4px 0; background: var(--gold); }
 .navbtn .count { margin-left: auto; background: var(--gold); color: var(--side); border-radius: 10px; font-size: 10px; font-weight: 800; padding: 1px 7px; }
 .sidefooter { margin-top: auto; font-size: 11px; color: #c69ba5; padding: 18px 10px 4px; display: grid; gap: 10px; }
 .me { display: flex; gap: 9px; align-items: center; color: #fff; }
@@ -93,7 +95,8 @@ a { color: var(--maroon); }
 
 /* ---------- Campaigns ---------- */
 .campaigns { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
-.cover { height: 150px; border-radius: 10px; display: grid; place-items: center; color: #fff; text-align: center; background: var(--sage); position: relative; overflow: hidden; }
+/* Every campaign cover uses the campaign-detail frame (220 × 175) so images crop identically everywhere. */
+.cover { aspect-ratio: 220 / 175; width: 100%; border-radius: 10px; display: grid; place-items: center; color: #fff; text-align: center; background: var(--sage); position: relative; overflow: hidden; }
 .cover::before { content: ""; position: absolute; inset: 12px; border: 1px solid #d7c4a2; z-index: 2; pointer-events: none; transition: inset .4s var(--ease); }
 .cover-text { display: grid; gap: 5px; z-index: 1; }
 .cover b { font: 700 35px Georgia, serif; letter-spacing: 1px; }
@@ -104,7 +107,10 @@ a { color: var(--maroon); }
 .campaigncard:hover .cover::before { inset: 8px; }
 .campaigncard:hover .cover-img { transform: scale(1.05); }
 .detailhead { display: grid; grid-template-columns: 220px 1fr; gap: 17px; }
-.detailhead .cover { height: 175px; }
+.detailhead .cover { width: 220px; }
+.cover-thumbs { display: grid; grid-template-columns: repeat(auto-fill, 220px); gap: 14px; }
+.cover-thumbs .campaigncard { width: 220px; }
+.cover-thumbs .campaigncard b { display: block; margin-top: 7px; }
 
 /* ---------- Tables ---------- */
 .tablewrap { overflow-x: auto; padding: 0; }
@@ -117,12 +123,11 @@ a { color: var(--maroon); }
 .tbl tbody tr.click { cursor: pointer; }
 .tbl tr:last-child td { border-bottom: 0; }
 .tbl select { max-width: 145px; padding: 7px; }
-.tabbar { display: flex; gap: 6px; overflow-x: auto; border-bottom: 1px solid var(--line); margin: 15px 0; scrollbar-width: none; }
+.tabbar { position: relative; display: flex; gap: 6px; overflow-x: auto; border-bottom: 1px solid var(--line); margin: 15px 0; scrollbar-width: none; }
+.tab-ind { position: absolute; left: 0; bottom: 0; height: 2px; border-radius: 2px; background: var(--maroon); transition: transform .45s var(--spring), width .35s var(--ease), opacity .2s; pointer-events: none; }
 .tabbar::-webkit-scrollbar { display: none; }
 .tabbar button { position: relative; padding: 11px 13px; border: 0; background: none; color: var(--muted); white-space: nowrap; transition: color .2s; }
-.tabbar button::after { content: ""; position: absolute; left: 10px; right: 10px; bottom: -1px; height: 2px; background: var(--maroon); transform: scaleX(0); transition: transform .3s var(--ease); }
 .tabbar button.active { color: var(--maroon); font-weight: 700; }
-.tabbar button.active::after { transform: scaleX(1); }
 .notice { padding: 12px; background: #eaf2e7; color: #496449; border-radius: 9px; margin-bottom: 15px; }
 .art { height: 150px; border-radius: 9px; background: #6c7f6a; display: grid; place-items: center; color: #fff; text-align: center; font-weight: 700; overflow: hidden; }
 .art img, .art video { width: 100%; height: 100%; object-fit: cover; transition: transform .5s var(--ease); }
@@ -208,7 +213,7 @@ a { color: var(--maroon); }
 .seg { display: inline-flex; background: #f0ece7; border-radius: 10px; padding: 3px; gap: 3px; }
 .seg button { border: 0; background: none; padding: 8px 14px; border-radius: 8px; color: var(--muted); font-weight: 600; transition: background .2s, color .2s, box-shadow .2s; }
 .seg button.on { background: #fff; color: var(--maroon); box-shadow: 0 1px 4px #0000001a; }
-.cover-pick { cursor: pointer; display: grid; }
+.cover-pick { cursor: pointer; display: grid; width: 220px; max-width: 100%; }
 .cover-pick .cover-cta { position: absolute; bottom: 18px; z-index: 3; font-size: 11px; background: #0006; color: #fff; padding: 4px 10px; border-radius: 20px; letter-spacing: .3px; transition: background .2s; }
 .cover-pick:hover .cover-cta { background: #000a; }
 
@@ -303,7 +308,9 @@ a { color: var(--maroon); }
   .fields, .campaigns, .detailhead { grid-template-columns: 1fr; }
   .grid { gap: 8px; }
   .card { padding: 13px; }
-  .cover { height: 130px; }
+  .detailhead .cover { width: 100%; max-width: 360px; }
+  .cover-thumbs { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .cover-thumbs .campaigncard { width: auto; }
   .stat strong { font-size: 24px; }
   .chartrow { grid-template-columns: 80px 1fr 28px; }
   /* Tables become stacked cards */
@@ -320,7 +327,9 @@ a { color: var(--maroon); }
   .tabnav a .ico { font-size: 18px; transition: transform .3s var(--spring); }
   .tabnav a.active { color: var(--maroon); font-weight: 700; }
   .tabnav a.active .ico { transform: translateY(-2px) scale(1.15); }
-  .tabnav a.active::before { content: ""; position: absolute; top: -6px; width: 26px; height: 3px; border-radius: 3px; background: var(--maroon); animation: pop .3s var(--spring); }
+  .tabnav { position: fixed; }
+  .tabnav-ind { position: absolute; top: 0; left: 0; height: 3px; border-radius: 0 0 4px 4px; background: var(--maroon); transition: transform .45s var(--spring), width .3s var(--ease), opacity .2s; pointer-events: none; }
+  .tabnav a { overflow: hidden; }
   .tabnav .dot { position: absolute; top: 2px; right: 26%; width: 8px; height: 8px; background: var(--maroon); border-radius: 50%; border: 2px solid #fff; }
   .toasts { left: 13px; right: 13px; bottom: calc(80px + var(--safe-b)); }
   .toast { max-width: none; }
@@ -340,3 +349,24 @@ a { color: var(--maroon); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001ms !important; animation-delay: 0ms !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
 }
+
+/* ---------- Fluid motion ---------- */
+/* Page-to-page view transitions (Chrome/Edge/Safari 18+). Sidebar & header stay put. */
+.side { view-transition-name: sidebar; }
+.top { view-transition-name: topbar; }
+.tabnav { view-transition-name: tabnav; }
+::view-transition-old(root) { animation: vtOut .2s var(--ease) both; }
+::view-transition-new(root) { animation: vtIn .38s var(--ease) both; }
+::view-transition-group(*) { animation-duration: .45s; animation-timing-function: cubic-bezier(.2, .9, .25, 1); }
+.vt .page { animation: none; }
+@keyframes vtOut { to { opacity: 0; transform: translateY(-6px) scale(.995); } }
+@keyframes vtIn { from { opacity: 0; transform: translateY(14px) scale(.995); } }
+
+/* Touch ripple */
+.btn, .send, .seg button, .tabnav a, .iconbtn { position: relative; overflow: hidden; isolation: isolate; }
+.ripple { position: absolute; border-radius: 50%; background: currentColor; opacity: .22; transform: scale(0); pointer-events: none; z-index: -1; animation: ripple .6s cubic-bezier(.2, .8, .2, 1) forwards; }
+@keyframes ripple { to { transform: scale(1); opacity: 0; } }
+
+/* Springy press feedback on cards and list rows */
+.campaigncard:active, .upcoming:active, .item.click:active, .link-card:active { transform: scale(.985); transition-duration: .12s; }
+.cover { transition: border-radius .3s var(--ease); }

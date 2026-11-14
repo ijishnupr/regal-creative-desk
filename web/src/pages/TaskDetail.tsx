@@ -4,6 +4,7 @@ import { useMe } from "../auth";
 import { ConfirmButton, DriveMedia, Empty, Pill, Skeleton, fmtDate, overdue, useToast } from "../components/ui";
 import { LinkEditor } from "../components/Links";
 import { TaskChat } from "../components/Chat";
+import { VLink, useVTNavigate } from "../components/motion";
 import { DESIGNER_STATUSES, STATUSES, type Task } from "../types";
 
 export default function TaskDetail() {
@@ -12,7 +13,7 @@ export default function TaskDetail() {
   const admin = me.role === "Admin";
   const { task, user, campaign, users, ready } = useData();
   const toast = useToast();
-  const nav = useNavigate();
+  const nav = useVTNavigate();
   const t = task(id);
   if (!t) return ready.tasks ? <div className="card"><Empty>Task not found. <Link to="/tasks">Back to tasks</Link></Empty></div> : <Skeleton h={300} />;
   const statusOpts = admin ? STATUSES : Array.from(new Set([...DESIGNER_STATUSES, t.status]));
@@ -20,7 +21,7 @@ export default function TaskDetail() {
 
   return (
     <>
-      <Link className="btn secondary tiny" to="/tasks">← Tasks</Link>
+      <VLink className="btn secondary tiny" to="/tasks">← Tasks</VLink>
       <div className="task-layout">
         <div className="card task-main">
           <div className="flex">

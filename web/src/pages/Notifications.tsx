@@ -1,3 +1,4 @@
+import { useVTNavigate, VLink, TabBar } from "../components/motion";
 import { useNavigate } from "react-router-dom";
 import { actions, useData } from "../data";
 import { useState } from "react";
@@ -5,7 +6,7 @@ import { Empty, fmtTime, stagger, useToast } from "../components/ui";
 
 export default function Notifications() {
   const { notifications } = useData();
-  const nav = useNavigate();
+  const nav = useVTNavigate();
   const toast = useToast();
   const supported = "Notification" in window;
   const [perm, setPerm] = useState(supported ? Notification.permission : "denied");

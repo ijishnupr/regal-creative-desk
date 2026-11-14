@@ -3,6 +3,7 @@ import { actions, useData } from "../data";
 import { useMe } from "../auth";
 import { Bar, Cover, Empty, SkeletonCards, progress, stagger, useToast } from "../components/ui";
 import { daysUntil, isUpcoming, type Campaign } from "../types";
+import { TabBar, VLink } from "../components/motion";
 
 export function countdown(iso?: string) {
   const n = daysUntil(iso);
@@ -64,10 +65,8 @@ export default function Campaigns() {
           </div>
         )}
       </div>
-      <div className="tabbar">
-        <button className={view === "active" ? "active" : ""} onClick={() => setSp({}, { replace: true })}>Active ({active.length})</button>
-        <button className={view === "upcoming" ? "active" : ""} onClick={() => setSp({ view: "upcoming" }, { replace: true })}>Upcoming ({upcoming.length})</button>
-      </div>
+      <TabBar value={view} onChange={(k) => setSp(k === "upcoming" ? { view: k } : {}, { replace: true })}
+        tabs={[["active", `Active (${active.length})`], ["upcoming", `Upcoming (${upcoming.length})`]] as const} />
       <div key={view} className="page">
         {!ready.campaigns ? <SkeletonCards /> : view === "active" ? (
           active.length ? (
@@ -75,14 +74,14 @@ export default function Campaigns() {
               {active.map((c, i) => {
                 const ts = tasks.filter((t) => t.campaignId === c.id), p = progress(ts);
                 return (
-                  <Link className="card campaigncard" to={`/campaigns/${c.id}`} key={c.id} style={stagger(i)}>
+                  <VLink className="card campaigncard" to={`/campaigns/${c.id}`} key={c.id} style={stagger(i)}>
                     <Cover c={c} />
                     <h3 style={{ fontSize: 15, margin: "13px 0 6px" }}>{c.name}</h3>
                     <p className="muted">{c.description}</p>
                     <div className="flex mini" style={{ marginBottom: 6 }}><span>{ts.length} tasks</span><b>{p}% approved</b></div>
                     <Bar value={p} />
                     <p className="muted">Open campaign →</p>
-                  </Link>
+                  </VLink>
                 );
               })}
             </div>

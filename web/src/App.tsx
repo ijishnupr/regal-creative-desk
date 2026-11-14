@@ -1,4 +1,5 @@
-import React, { lazy, Suspense, useEffect, useRef, useState } from "react";
+import React, { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useSlidingIndicator, useVTClick, useVTNavigate } from "./components/motion";
 import { NavLink, Route, Routes, useLocation, useNavigate, Navigate } from "react-router-dom";
 import { useAuth } from "./auth";
 import { DataProvider, useData } from "./data";
@@ -70,7 +71,11 @@ function Shell() {
   const [ring, setRing] = useState(false);
   const [title, subtitle] = titleFor(loc.pathname, admin);
 
-  useEffect(() => { setOpen(false); window.scrollTo({ top: 0 }); }, [loc.pathname]);
+  useLayoutEffect(() => { setOpen(false); window.scrollTo({ top: 0 }); }, [loc.pathname]);
+  const vclick = useVTClick();
+  const vnav = useVTNavigate();
+  const [sideRef, sideInd] = useSlidingIndicator<HTMLElement>(".navbtn.active", [loc.pathname, admin], "y");
+  const [tabRef, tabInd] = useSlidingIndicator<HTMLElement>("a.active", [loc.pathname]);
   useEffect(() => { document.title = `${title} · Regal Creative Desk`; }, [title]);
   useEffect(() => {
     if (unread > prevUnread.current) { setRing(true); setTimeout(() => setRing(false), 1400); }
@@ -127,9 +132,10 @@ function Shell() {
           <img src={`${import.meta.env.BASE_URL}icons/logo.png`} alt="Regal Jewellers logo" />
           <div><b>REGAL</b><small>CREATIVE DESK</small></div>
         </div>
-        <nav>
+        <nav ref={sideRef}>
+          <span className="nav-ind" style={sideInd} aria-hidden="true" />
           {items.map(([to, ico, label]) => (
-            <NavLink key={to} to={to} end={to === "/"} className={({ isActive }) => "navbtn" + (isActive ? " active" : "")}>
+            <NavLink key={to} to={to} end={to === "/"} onClick={(e) => vclick(e, to)} className={({ isActive }) => "navbtn" + (isActive ? " active" : "")}>
               <span className="ico">{ico}</span>{label}
               {to === "/notifications" && unread > 0 && <span className="count">{unread}</span>}
               {to === "/approvals" && admin && reviewCount > 0 && <span className="count">{reviewCount}</span>}
@@ -148,7 +154,7 @@ function Shell() {
           <button className="burger" onClick={() => setOpen(true)} aria-label="Open menu">☰</button>
           <div className="titles"><h1 key={title} className="page">{title}</h1><small>{subtitle}</small></div>
           <div className="right">
-            <button className={"bell" + (ring ? " ring" : "")} onClick={() => nav("/notifications")} title="Notifications">
+            <button className={"bell" + (ring ? " ring" : "")} onClick={() => vnav("/notifications")} title="Notifications">
               <span className="bell-ico">🔔</span>{unread > 0 && <span className="badge" key={unread}>{unread}</span>}
             </button>
           </div>
@@ -174,9 +180,10 @@ function Shell() {
           </Suspense>
         </main>
       </div>
-      <nav className="tabnav">
+      <nav className="tabnav" ref={tabRef}>
+        <span className="tabnav-ind" style={tabInd} aria-hidden="true" />
         {mobileTabs.map(([to, ico, label]) => (
-          <NavLink key={to} to={to} end={to === "/"} className={({ isActive }) => (isActive ? "active" : "")}>
+          <NavLink key={to} to={to} end={to === "/"} onClick={(e) => vclick(e, to)} className={({ isActive }) => (isActive ? "active" : "")}>
             <span className="ico">{ico}</span>{label === "Task Tracker" ? "Tasks" : label === "Notifications" ? "Alerts" : label}
             {to === "/notifications" && unread > 0 && <span className="dot" />}
           </NavLink>

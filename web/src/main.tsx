@@ -6,6 +6,9 @@ import App from "./App";
 import { AuthProvider } from "./auth";
 import { ToastProvider } from "./components/ui";
 import "./styles.css";
+import { installRipples } from "./components/motion";
+
+installRipples();
 
 registerSW({ immediate: true });
 

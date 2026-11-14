@@ -1,3 +1,4 @@
+import { useVTNavigate, VLink, TabBar } from "./motion";
 import { useNavigate } from "react-router-dom";
 import { useData, actions } from "../data";
 import { useMe } from "../auth";
@@ -8,7 +9,7 @@ import { driveId } from "./Links";
 
 export function TaskTable({ tasks, showCampaign = true }: { tasks: Task[]; showCampaign?: boolean }) {
   const { user, campaign } = useData();
-  const nav = useNavigate();
+  const nav = useVTNavigate();
   return (
     <div className="card tablewrap">
       <table className="tbl responsive stagger">
@@ -43,7 +44,7 @@ export function SubmissionCards({ tasks }: { tasks: Task[] }) {
   const { user, campaign } = useData();
   const me = useMe();
   const toast = useToast();
-  const nav = useNavigate();
+  const nav = useVTNavigate();
   const admin = me.role === "Admin";
   if (!tasks.length) return <div className="card"><Empty>No submissions available yet.</Empty></div>;
   return (

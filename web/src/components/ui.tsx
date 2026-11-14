@@ -58,9 +58,9 @@ export function DriveMedia({ fileId, mime, alt, className, style, onLoad }: {
     onLoad={() => { setLoaded(true); onLoad?.(); }} />;
 }
 
-export function Cover({ c, height }: { c: Campaign; height?: number }) {
+export function Cover({ c }: { c: Campaign }) {
   return (
-    <div className="cover" style={{ background: c.color || "#71846d", height }}>
+    <div className="cover" style={{ background: c.color || "#71846d", viewTransitionName: `cover-${c.id}` } as CSSProperties}>
       {c.coverFileId
         ? <DriveMedia fileId={c.coverFileId} alt="Campaign cover" className="cover-img" />
         : <div className="cover-text"><b>{c.label || "REGAL"}</b><span>REGAL JEWELLERS</span></div>}

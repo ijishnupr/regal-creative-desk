@@ -26,7 +26,7 @@ export default function NewCampaign() {
         <button type="button" className={!upcoming ? "on" : ""} onClick={() => setUpcoming(false)}>Active now</button>
         <button type="button" className={upcoming ? "on" : ""} onClick={() => setUpcoming(true)}>Upcoming</button>
       </div>
-      <label className="cover cover-pick" style={{ background: color, height: 150, margin: "14px 0", transition: "background .3s" }}>
+      <label className="cover cover-pick" style={{ background: color, margin: "14px 0", transition: "background .3s" }}>
         {preview ? <img className="cover-img" src={preview} alt="Cover preview" /> : <div className="cover-text"><b>{label || "REGAL"}</b><span>REGAL JEWELLERS</span></div>}
         <span className="cover-cta">{preview ? "Change cover image" : "⇪ Add cover image (optional)"}</span>
         <input type="file" accept="image/*" hidden onChange={(e) => {
