@@ -153,7 +153,7 @@ a { color: var(--maroon); }
 .uploadbar.indet i { width: 40% !important; animation: indet 1.1s ease-in-out infinite; }
 
 /* ---------- Task page: main + chat ---------- */
-.task-layout { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; margin-top: 14px; align-items: start; }
+.task-layout { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; margin-top: 14px; align-items: stretch; }
 .task-main .twocol { margin-top: 6px; }
 .subcard { border: 1px solid var(--line); background: var(--soft); border-radius: 11px; padding: 14px; margin-top: 16px; }
 .subcard .sectiontitle { font-size: 14px; margin-bottom: 10px; }
@@ -183,7 +183,10 @@ a { color: var(--maroon); }
 .chip { border: 1px solid #e3c9cf; background: #fbe9eb; color: #9c3648; border-radius: 20px; padding: 4px 10px; font-size: 11px; animation: pop .25s var(--spring); }
 
 /* Chat */
-.chat { position: sticky; top: 84px; height: calc(100vh - 110px); height: calc(100dvh - 110px); min-height: 420px; display: flex; flex-direction: column; padding: 0; overflow: hidden; }
+/* Same height as the task card beside it: `contain: size` stops the messages from growing the row,
+   the grid then stretches the panel to the card's height and the list scrolls inside. */
+.chat { contain: size; min-height: 460px; display: flex; flex-direction: column; padding: 0; overflow: hidden; }
+.chat-list { min-height: 0; }
 .chat-head { display: flex; justify-content: space-between; align-items: center; padding: 13px 15px; border-bottom: 1px solid var(--line); background: linear-gradient(180deg, #fff, var(--soft)); }
 .chat-list { flex: 1; overflow-y: auto; padding: 14px 12px; display: flex; flex-direction: column; gap: 4px; background: #fbfaf8; overscroll-behavior: contain; }
 .chat-empty { margin: auto; text-align: center; color: var(--muted); font-size: 12px; max-width: 220px; }
@@ -254,7 +257,7 @@ a { color: var(--maroon); }
 /* ---------- Login ---------- */
 .login { min-height: 100vh; min-height: 100dvh; display: grid; place-items: center; background: radial-gradient(circle at 30% 20%, #85283c, var(--side) 60%); padding: 20px; }
 .login .card { width: min(400px, 100%); text-align: center; padding: 34px 28px; animation: modalIn .5s var(--spring) both; }
-.login img { width: 76px; height: 76px; object-fit: contain; animation: float 4s ease-in-out infinite; }
+.login img { width: 76px; height: 76px; object-fit: contain; }
 .login h1 { font: 700 26px Georgia, serif; color: var(--maroon); margin: 12px 0 2px; letter-spacing: 1px; }
 .spinner { width: 34px; height: 34px; border: 3px solid #ffffff44; border-top-color: var(--gold); border-radius: 50%; animation: spin .8s linear infinite; }
 .install { position: fixed; left: 50%; bottom: calc(18px + var(--safe-b)); transform: translateX(-50%); z-index: 80; display: flex; gap: 10px; align-items: center; background: #fff; border: 1px solid var(--line); box-shadow: 0 10px 30px #0002; padding: 10px 12px; border-radius: 12px; animation: toastIn .4s var(--spring) both; }
@@ -285,7 +288,7 @@ a { color: var(--maroon); }
 /* ---------- Responsive ---------- */
 @media (max-width: 1200px) {
   .task-layout { grid-template-columns: 1fr; }
-  .chat { position: static; height: 560px; }
+  .chat { contain: none; height: 560px; }
 }
 @media (max-width: 1000px) {
   .app { grid-template-columns: 200px 1fr; }
